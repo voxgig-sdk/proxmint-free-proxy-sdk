@@ -1,0 +1,51 @@
+<?php
+declare(strict_types=1);
+
+// ProxmintFreeProxy SDK utility: prepare_method
+
+class ProxmintFreeProxyPrepareMethod
+{
+    private const METHOD_MAP = [
+        'create' => 'POST',
+        'update' => 'PUT',
+        'load' => 'GET',
+        'list' => 'GET',
+        'remove' => 'DELETE',
+        'patch' => 'PATCH',
+    ];
+
+    public static function call(ProxmintFreeProxyContext $ctx): ?string
+    {
+        // The API definition is authoritative: a POST-only or PATCH-based API
+        // exposes `update` as POST or PATCH, not the PUT the op name implies.
+        // Only fall back to the op-name convention when the point has no method.
+        $point = $ctx->point;
+        if ($point) {
+            $method = \Voxgig\Struct\Struct::getprop($point, 'method');
+            if (is_string($method) && '' !== $method) {
+                return strtoupper($method);
+            }
+        }
+
+        // No default: an op name outside the convention resolves to no method,
+        // exactly as the ts reference (`methodMap[key]` is undefined there).
+        // The silent-pass inline runner hid a stray 'GET' fallback here; the
+        // shared corpus (prepareMethod, opname "bad" -> null) pins it now.
+        return self::METHOD_MAP[$ctx->op->name] ?? null;
+    }
+
+    // Whether a comma-separated allow option names the item: whole names, any case.
+    public static function allowed(mixed $names, mixed $item): bool
+    {
+        $want = is_string($item) ? strtoupper($item) : '';
+        if ('' === $want || !is_string($names)) {
+            return false;
+        }
+        foreach (explode(',', $names) as $name) {
+            if (strtoupper(trim($name)) === $want) {
+                return true;
+            }
+        }
+        return false;
+    }
+}

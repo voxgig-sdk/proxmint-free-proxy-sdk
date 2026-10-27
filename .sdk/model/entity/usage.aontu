@@ -1,0 +1,92 @@
+# Entity: usage
+
+main: kit: entity: usage: {
+
+  alias: field: {}
+
+  fields: {
+    bytes: {
+      h: "Bytes"
+      n: "bytes"
+      r: true
+      t: "`$INTEGER`"
+    }
+    day: {
+      fo: "date"
+      h: "Day"
+      n: "day"
+      r: true
+      t: "`$STRING`"
+    }
+    product: {
+      h: "Product"
+      n: "product"
+      r: true
+      t: "`$STRING`"
+    }
+    productId: {
+      h: "Product Id"
+      n: "productId"
+      r: true
+      t: "`$STRING`"
+    }
+    requests: {
+      h: "Requests"
+      n: "requests"
+      r: true
+      t: "`$INTEGER`"
+    }
+  }
+
+  name: "usage"
+  op: {
+    list: {
+      name: "list"
+      points: [
+        {
+          co: {
+            id: "GET /api/v1/usage"
+            source: "openapi3"
+            version: 2
+          }
+          g: {
+            query: [
+              {
+                ex: 30
+                k: "query"
+                n: "day"
+                or: "days"
+                r: false
+                t: "`$INTEGER`"
+              }
+            ]
+          }
+          m: "GET"
+          o: "/api/v1/usage"
+          rs: {
+            kind: "json"
+            media: "application/json"
+          }
+          s: [
+            {
+              lit: "api"
+            }
+            {
+              lit: "v1"
+            }
+            {
+              lit: "usage"
+            }
+          ]
+          t: {
+            req: "`reqdata`"
+            res: "`body.usage`"
+          }
+        }
+      ]
+    }
+  }
+
+
+
+}

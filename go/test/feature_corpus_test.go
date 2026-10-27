@@ -1,0 +1,567 @@
+package sdktest
+
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+	"sort"
+	"strings"
+	"testing"
+
+	sdk "github.com/voxgig-sdk/proxmint-free-proxy-sdk/go"
+)
+
+// Features with a corpus section are read from the corpus itself (see
+// TestFeatureCorpus), so a project-authored section — a custom feature
+// added under .sdk/test/feature/ — runs without editing this file. An
+// SDK generated without a listed feature still skips, not fails.
+
+var featureCorpusOps = []string{"Load", "List", "Create", "Update", "Patch", "Remove"}
+
+// One operation this SDK can actually perform.
+type fcOp struct {
+	key      string // "<entity>.<op>", how features attribute it
+	accessor string // the client method returning the entity
+	method   string
+}
+
+// fcFetcher builds a scripted transport from a case's `res` list. Responses
+// are consumed in order and the last one repeats, so a case that does not
+// care how many attempts happen need only declare one.
+func fcFetcher(res []any) sdk.FetcherFunc {
+	n := -1
+	return func(ctx *sdk.Context, fullurl string, fetchdef map[string]any) (any, error) {
+		n++
+		var spec map[string]any
+		if len(res) > 0 {
+			i := n
+			if i >= len(res) {
+				i = len(res) - 1
+			}
+			spec, _ = res[i].(map[string]any)
+		}
+		if spec == nil {
+			spec = map[string]any{}
+		}
+
+		if thrown, _ := spec["throw"].(bool); thrown {
+			return nil, fmt.Errorf("scripted transport failure")
+		}
+
+		status := 200
+		if s, ok := fcNum(spec["status"]); ok {
+			status = int(s)
+		}
+		statusText := "OK"
+		if status >= 400 {
+			statusText = "ERR"
+		}
+
+		headers := map[string]any{}
+		if h, ok := spec["headers"].(map[string]any); ok {
+			for k, v := range h {
+				headers[k] = v
+			}
+		}
+
+		body := spec["body"]
+		if body == nil {
+			body = map[string]any{}
+		}
+
+		// The shape the real fetcher returns: the PARSED body comes back
+		// through a `json` thunk, and `body` is the raw string. makeResult
+		// reads the thunk, so a scripted response that only set `body` would
+		// look like an empty result - which reads as a feature defect rather
+		// than a mis-shaped script.
+		raw, _ := json.Marshal(body)
+
+		return map[string]any{
+			"status":     status,
+			"statusText": statusText,
+			"headers":    headers,
+			"json":       (func() any)(func() any { return body }),
+			"body":       string(raw),
+		}, nil
+	}
+}
+
+func fcClient(kase map[string]any) *sdk.ProxmintFreeProxySDK {
+	res, _ := kase["res"].([]any)
+	opts := map[string]any{
+		"test":    map[string]any{"active": true},
+		"utility": map[string]any{"fetcher": fcFetcher(res)},
+	}
+	if f, ok := kase["feature"]; ok {
+		opts["feature"] = f
+	}
+	return sdk.NewProxmintFreeProxySDK(opts)
+}
+
+// fcCandidates lists the operations this SDK declares, in a stable order.
+//
+// The corpus cannot name an entity - it is shared by SDKs with none in common
+// - so the runner finds them here. An entity accessor is a client method
+// taking one options map and returning something that answers GetName().
+func fcCandidates(client *sdk.ProxmintFreeProxySDK) []fcOp {
+	out := []fcOp{}
+
+	cv := reflect.ValueOf(client)
+	ct := cv.Type()
+	mapType := reflect.TypeOf(map[string]any{})
+
+	names := []string{}
+	byName := map[string]reflect.Value{}
+
+	for i := 0; i < ct.NumMethod(); i++ {
+		m := ct.Method(i)
+		mt := m.Type
+		// (receiver, entopts) -> entity
+		if mt.NumIn() != 2 || mt.NumOut() != 1 || mt.In(1) != mapType {
+			continue
+		}
+		ent := cv.Method(i).Call([]reflect.Value{reflect.ValueOf(map[string]any(nil))})[0]
+		if !ent.IsValid() || (ent.Kind() == reflect.Ptr && ent.IsNil()) {
+			continue
+		}
+		gn := ent.MethodByName("GetName")
+		if !gn.IsValid() || gn.Type().NumIn() != 0 || gn.Type().NumOut() != 1 ||
+			gn.Type().Out(0).Kind() != reflect.String {
+			continue
+		}
+		entname := gn.Call(nil)[0].String()
+		if entname == "" {
+			continue
+		}
+		names = append(names, entname)
+		byName[entname] = ent
+		_ = m
+	}
+
+	// Sorted, so the choice of operation is stable across runs.
+	for i := 0; i < len(names); i++ {
+		for j := i + 1; j < len(names); j++ {
+			if names[j] < names[i] {
+				names[i], names[j] = names[j], names[i]
+			}
+		}
+	}
+
+	for _, entname := range names {
+		ent := byName[entname]
+		for _, opname := range featureCorpusOps {
+			om := ent.MethodByName(opname)
+			if !om.IsValid() || om.Type().NumIn() != 2 || om.Type().NumOut() != 2 {
+				continue
+			}
+			out = append(out, fcOp{
+				key:      entname + "." + strings.ToLower(opname),
+				accessor: entname,
+				method:   opname,
+			})
+		}
+	}
+
+	// SAFE OPS FIRST — see the ts harness for the reasoning: the cache stores
+	// only successful GETs, so an SDK whose first usable op is a `create`
+	// (POST) can never satisfy "a hit served from cache costs nothing".
+	safe := map[string]int{"list": 0, "load": 1}
+	rank := func(o fcOp) int {
+		if r, ok := safe[strings.ToLower(o.method)]; ok {
+			return r
+		}
+		return 2
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if rank(out[i]) != rank(out[j]) {
+			return rank(out[i]) < rank(out[j])
+		}
+		return out[i].key < out[j].key
+	})
+	return out
+}
+
+// fcInvoke performs one operation on a client, by entity name and method.
+func fcInvoke(client *sdk.ProxmintFreeProxySDK, op fcOp, ctrl map[string]any) error {
+	cv := reflect.ValueOf(client)
+	ct := cv.Type()
+	mapType := reflect.TypeOf(map[string]any{})
+
+	for i := 0; i < ct.NumMethod(); i++ {
+		mt := ct.Method(i).Type
+		if mt.NumIn() != 2 || mt.NumOut() != 1 || mt.In(1) != mapType {
+			continue
+		}
+		ent := cv.Method(i).Call([]reflect.Value{reflect.ValueOf(map[string]any(nil))})[0]
+		gn := ent.MethodByName("GetName")
+		if !gn.IsValid() || gn.Type().NumIn() != 0 || gn.Type().NumOut() != 1 ||
+			gn.Type().Out(0).Kind() != reflect.String {
+			continue
+		}
+		if gn.Call(nil)[0].String() != op.accessor {
+			continue
+		}
+		om := ent.MethodByName(op.method)
+		if !om.IsValid() {
+			return fmt.Errorf("no method %s on entity %s", op.method, op.accessor)
+		}
+		rets := om.Call([]reflect.Value{
+			reflect.ValueOf(map[string]any{}),
+			reflect.ValueOf(ctrl),
+		})
+		if err, ok := rets[1].Interface().(error); ok && err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("no entity accessor for %s", op.accessor)
+}
+
+// fcUsableOps picks operations by DRIVING them: an op is usable when it
+// completes against a plain 200 with no feature active. Declared operations
+// are not all callable with no arguments (a required path parameter, a body),
+// and a case failing for that reason would read as a feature defect.
+func fcUsableOps(want int) []fcOp {
+	picked := []fcOp{}
+	probe := fcClient(map[string]any{})
+	for _, cand := range fcCandidates(probe) {
+		client := fcClient(map[string]any{})
+		if err := fcInvoke(client, cand, map[string]any{}); err != nil {
+			continue
+		}
+		picked = append(picked, cand)
+		if len(picked) >= want {
+			break
+		}
+	}
+	return picked
+}
+
+// fcResolve replaces #OPn throughout a case, keys included.
+func fcResolve(node any, tokens map[string]string) any {
+	switch v := node.(type) {
+	case string:
+		out := v
+		for tok, val := range tokens {
+			out = strings.ReplaceAll(out, tok, val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = fcResolve(item, tokens)
+		}
+		return out
+	case map[string]any:
+		out := map[string]any{}
+		for k, item := range v {
+			key, _ := fcResolve(k, tokens).(string)
+			out[key] = fcResolve(item, tokens)
+		}
+		return out
+	}
+	return node
+}
+
+// fcTokensUsed reports the highest #OPn a case mentions. A case wanting more
+// operations than this SDK offers is skipped rather than failed.
+func fcTokensUsed(kase map[string]any) int {
+	raw, err := json.Marshal(kase)
+	if err != nil {
+		return 0
+	}
+	max := 0
+	s := string(raw)
+	for i := 0; i+4 < len(s); i++ {
+		if s[i:i+3] != "#OP" {
+			continue
+		}
+		n := 0
+		j := i + 3
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			n = n*10 + int(s[j]-'0')
+			j++
+		}
+		if n > max {
+			max = n
+		}
+	}
+	return max
+}
+
+func fcNum(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		return f, err == nil
+	}
+	return 0, false
+}
+
+func fcSubset(t *testing.T, actual any, expect any, path string) {
+	t.Helper()
+
+	if em, ok := expect.(map[string]any); ok {
+		for k, want := range em {
+			got, found := fcMember(actual, k)
+			if !found {
+				t.Errorf("%s.%s: no such member", path, k)
+				continue
+			}
+			fcSubset(t, got, want, path+"."+k)
+		}
+		return
+	}
+
+	if wn, ok := fcNum(expect); ok {
+		gn, ok := fcNum(actual)
+		if !ok {
+			t.Errorf("%s: expected number %v, got %v", path, expect, actual)
+			return
+		}
+		// Money is float arithmetic; compare with a tolerance far below any
+		// amount a case states.
+		if diff := gn - wn; diff > 1e-9 || diff < -1e-9 {
+			t.Errorf("%s: got %v, want %v", path, gn, wn)
+		}
+		return
+	}
+
+	if fmt.Sprintf("%v", actual) != fmt.Sprintf("%v", expect) {
+		t.Errorf("%s: got %v, want %v", path, actual, expect)
+	}
+}
+
+// fcMember reads one member from a struct (by capitalised field name), a
+// pointer to one, or a map (by key).
+func fcMember(actual any, key string) (any, bool) {
+	if actual == nil {
+		return nil, false
+	}
+	v := reflect.ValueOf(actual)
+	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return nil, false
+		}
+		v = v.Elem()
+	}
+
+	switch v.Kind() {
+	case reflect.Map:
+		mv := v.MapIndex(reflect.ValueOf(key))
+		if !mv.IsValid() {
+			return nil, false
+		}
+		return mv.Interface(), true
+	case reflect.Struct:
+		f := v.FieldByName(strings.ToUpper(key[:1]) + key[1:])
+		if !f.IsValid() {
+			return nil, false
+		}
+		return f.Interface(), true
+	}
+	return nil, false
+}
+
+func fcRecord(client *sdk.ProxmintFreeProxySDK, name string) any {
+	for _, f := range client.Features {
+		if f.GetName() == name {
+			return f
+		}
+	}
+	return nil
+}
+
+// fcMissingFeature names the first feature a case composes that this SDK
+// does not generate, probed as a section's own feature is. Such a case is
+// skipped rather than failed.
+func fcMissingFeature(kase map[string]any, have map[string]bool) string {
+	var names []string
+	switch f := kase["feature"].(type) {
+	case []any:
+		for _, one := range f {
+			if m, ok := one.(map[string]any); ok {
+				if n, ok := m["name"].(string); ok {
+					names = append(names, n)
+				}
+			}
+		}
+	case map[string]any:
+		for n := range f {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+	}
+
+	for _, name := range names {
+		known, seen := have[name]
+		if !seen {
+			probe := fcClient(map[string]any{
+				"feature": []any{map[string]any{"name": name, "active": true}},
+			})
+			known = fcRecord(probe, name) != nil
+			have[name] = known
+		}
+		if !known {
+			return name
+		}
+	}
+	return ""
+}
+
+func TestFeatureCorpus(t *testing.T) {
+	spec := loadTestSpec(t)
+
+	featureSection := getSpec(spec, "feature")
+	if featureSection == nil {
+		t.Skip("this project's test.json has no `feature` section - recompile the corpus (create-sdkgen .sdk/test/feature/) to run these cases")
+	}
+
+	ops := fcUsableOps(2)
+	have := map[string]bool{}
+
+	// With every operation needing an argument there is nothing to drive:
+	// skip and say so, as the clean test does, rather than fail.
+	if len(ops) == 0 {
+		t.Skip("no declared operation completes against a plain 200 with no arguments (each needs a path parameter or a body); nothing for the corpus to drive")
+	}
+
+	featureCorpusNames := make([]string, 0, len(featureSection))
+	for name := range featureSection {
+		featureCorpusNames = append(featureCorpusNames, name)
+	}
+	sort.Strings(featureCorpusNames)
+
+	for _, name := range featureCorpusNames {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			section, _ := featureSection[name].(map[string]any)
+			if section == nil {
+				t.Skipf("no corpus section for %s", name)
+			}
+
+			basic, _ := section["basic"].(map[string]any)
+			cases, _ := basic["set"].([]any)
+			if len(cases) == 0 {
+				t.Fatalf("corpus section feature.%s ran ZERO cases - a renamed "+
+					"section or an emptied fixture must fail loudly", name)
+			}
+
+			// Only run what this SDK actually has, the same rule the rest of
+			// the feature tests use. Probed by ACTIVATING it: the feature
+			// defaults to inactive, so an idle client never constructs it and
+			// its absence from Features says nothing about the SDK.
+			probe := fcClient(map[string]any{
+				"feature": []any{map[string]any{"name": name, "active": true}},
+			})
+			if fcRecord(probe, name) == nil {
+				t.Logf("feature.%s: inert (this SDK does not generate the feature)", name)
+				t.Skipf("this SDK was generated without the %s feature", name)
+			}
+
+			ran := 0
+			for _, raw := range cases {
+				kase, _ := raw.(map[string]any)
+				if kase == nil {
+					continue
+				}
+
+				need := fcTokensUsed(kase)
+				if need > len(ops) {
+					t.Logf("skip %q: needs %d operations, this SDK offers %d",
+						kase["name"], need, len(ops))
+					continue
+				}
+
+				if missing := fcMissingFeature(kase, have); missing != "" {
+					t.Logf("skip %q: needs the %s feature, which this SDK does not generate",
+						kase["name"], missing)
+					continue
+				}
+
+				tokens := map[string]string{}
+				for i := 0; i < need; i++ {
+					tokens[fmt.Sprintf("#OP%d", i+1)] = ops[i].key
+				}
+				resolved, _ := fcResolve(kase, tokens).(map[string]any)
+
+				byKey := map[string]fcOp{}
+				for _, o := range ops {
+					byKey[o.key] = o
+				}
+
+				client := fcClient(resolved)
+				label, _ := resolved["name"].(string)
+
+				steps, _ := resolved["op"].([]any)
+				for _, rawstep := range steps {
+					step, _ := rawstep.(map[string]any)
+					if step == nil {
+						continue
+					}
+					opkey, _ := step["op"].(string)
+					op, ok := byKey[opkey]
+					if !ok {
+						t.Errorf("%s: no operation %s", label, opkey)
+						continue
+					}
+					ctrl := map[string]any{}
+					if c, ok := step["ctrl"].(map[string]any); ok {
+						ctrl = c
+					}
+
+					err := fcInvoke(client, op, ctrl)
+					wanterr, haserr := step["err"]
+
+					if !haserr {
+						if err != nil {
+							t.Errorf("%s: %s failed unexpectedly: %v", label, opkey, err)
+						}
+						continue
+					}
+					if err == nil {
+						t.Errorf("%s: %s was expected to fail, and did not", label, opkey)
+						continue
+					}
+					if code, ok := wanterr.(string); ok {
+						// The CODE, not the message. The message is prefixed
+						// and humanised by makeError, so matching its text
+						// would pass on any error that happened to mention
+						// the word.
+						got := ""
+						var sdkerr *sdk.ProxmintFreeProxyError
+						if errors.As(err, &sdkerr) {
+							got = sdkerr.Code
+						}
+						if got != code {
+							t.Errorf("%s: wrong error code: got %q (%v), want %q",
+								label, got, err, code)
+						}
+					}
+				}
+
+				fcSubset(t, fcRecord(client, name), resolved["out"], label+": _"+name)
+				ran++
+			}
+
+			if ran == 0 {
+				t.Fatalf("every feature.%s case was skipped", name)
+			}
+			// Say how many ran. A partial run is legitimate (an SDK with one
+			// operation skips the cases needing two) but it should be visible
+			// rather than inferred from a green tick.
+			t.Logf("feature.%s: ran %d of %d case(s) against %d operation(s)",
+				name, ran, len(cases), len(ops))
+		})
+	}
+}

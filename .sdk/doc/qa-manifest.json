@@ -1,0 +1,27 @@
+{
+  "files": [
+    "SUMMARY.md"
+  ],
+  "config": ".sdk/doc/qa/vale.ini",
+  "routes": {},
+  "quoted": {
+    "SUMMARY.md": [
+      "> Two kinds of endpoint. The free proxy list and IP geolocation are open and key-free: rate limited per IP and sent with `access-control-allow-origin: *`, so they work from a browser as well as a server. The proxy list is published under CC BY 4.0, attribution is the only condition.\n>\n> The customer API under `/api/v1` is read-only and needs an API key, created under Settings in the dashboard and sent as `Authorization: Bearer &lt;key&gt;`. It returns proxy credentials, so it sends no CORS headers: call it from a server, never from browser code.",
+      "A page of live proxies",
+      "An API key (`pmk_…`) from Settings in the dashboard. Read-only.",
+      "Everything a client needs to connect.",
+      "First subdivision, English name, else ISO code.",
+      "IANA timezone, for example America/`New_York`.",
+      "ISO 3166-1 alpha-2, lowercase.",
+      "Measured on the last successful check.",
+      "Radius around lat/lon, in km.",
+      "Ranking blend of uptime and latency.",
+      "Share of checks this proxy has answered.",
+      "Stable product id; matches `productId` in usage rows.",
+      "The account behind the key",
+      "Usage rows for the window",
+      "What is known about the address. Fields are null where the database has no value",
+      "`expired` means the bandwidth is used up, packs never expire by date."
+    ]
+  }
+}

@@ -1,0 +1,174 @@
+
+import { cmp, each, Content, canonToType, canonKey, canonScalarKey, entityIdField, safeVarName, exampleVarName, opNeedsAction, matchExampleItems, litString, requestExampleItems } from '@voxgig/sdkgen'
+
+import {
+  KIT,
+  getModelPath,
+} from '@voxgig/apidef'
+
+import { rbListArgs } from './utility_rb'
+
+
+function rbLit(type: any, placeholder: string = 'example'): string {
+  const k = canonScalarKey(type)
+  if ('NULL' === k) return 'nil'
+  if ('INTEGER' === k || 'NUMBER' === k) return '1'
+  if ('BOOLEAN' === k) return 'true'
+  if ('ARRAY' === k) return '[]'
+  if ('OBJECT' === k) return '{}'
+  return litString('rb', placeholder)
+}
+
+
+// Operation method spelling differs between Go and other languages — Go
+// uses PascalCase methods with explicit ctrl arg, others use lowercase
+// methods with optional ctrl. The op descriptions are language-agnostic.
+const OP_DESC: Record<string, { method: string, desc: string }> = {
+  load:   { method: 'load(match)',   desc: 'Load a single entity by match criteria.' },
+  list:   { method: 'list(match)',   desc: 'List entities matching the criteria.' },
+  create: { method: 'create(data)',  desc: 'Create a new entity with the given data.' },
+  update: { method: 'update(data)',  desc: 'Update an existing entity.' },
+  patch:  { method: 'patch(data)',   desc: 'Change part of an existing entity.' },
+  remove: { method: 'remove(match)', desc: 'Remove the matching entity.' },
+}
+
+
+const ReadmeEntity = cmp(function ReadmeEntity(props: any) {
+  const { target } = props
+  const { model } = props.ctx$
+
+  const entity = getModelPath(model, `main.${KIT}.entity`)
+
+  const publishedEntities = each(entity)
+    .filter((entity: any) => entity.active !== false)
+
+  if (0 === publishedEntities.length) {
+    return
+  }
+
+  Content(`
+
+## Entities
+
+`)
+
+  publishedEntities.map((entity: any) => {
+    const opnames = Object.keys(entity.op || {})
+    // An op that needs an action has no plain call to show.
+    const callable = opnames.filter((o: string) => !opNeedsAction(entity.op[o]))
+    const fields = Object.values(entity.fields || {})
+    const idF = entityIdField(entity)
+    // Sanitise the local variable name — an entity whose lowercased name is a
+    // Ruby keyword (e.g. `self`) would otherwise emit uncompilable code.
+    const eVar = exampleVarName(entity.name, 'rb')
+
+    Content(`
+### ${entity.Name}
+
+`)
+
+    if (entity.short) {
+      Content(`${entity.short}
+
+`)
+    }
+
+    Content(`Create an instance: \`${eVar} = client.${entity.Name}\`
+
+`)
+
+    if (opnames.length > 0) {
+      Content(`#### Operations
+
+| Method | Description |
+| --- | --- |
+`)
+      opnames.map((opname: string) => {
+        const info = OP_DESC[opname]
+        if (info) {
+          Content(`| \`${info.method}\` | ${info.desc} |
+`)
+        }
+      })
+
+      Content(`
+`)
+    }
+
+    if (fields.length > 0) {
+      Content(`#### Fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+`)
+
+      each(fields, (field: any) => {
+        const desc = field.sh || ''
+        Content(`| \`${field.n}\` | \`${canonToType(field.t, target.name)}\` | ${desc} |
+`)
+      })
+
+      Content(`
+`)
+    }
+
+    if (callable.includes('load')) {
+      const loadItems = matchExampleItems(entity, 'load', idF)
+        .sort((a: any, b: any) =>
+          (a.name === idF ? 0 : 1) - (b.name === idF ? 0 : 1))
+      const loadArg = 0 < loadItems.length
+        ? `{ ${loadItems.map((it: any) =>
+          `${litString('rb', it.name)} => ${rbLit(it.type,
+            it.name === idF ? entity.name + '_id' : it.name)}`).join(', ')} }`
+        : ''
+      Content(`#### Example: Load
+
+\`\`\`ruby
+# load returns the ENTITY — call data_get for the ${entity.Name} record (raises on error).
+${eVar} = client.${entity.Name}.load(${loadArg})
+\`\`\`
+
+`)
+    }
+
+    if (callable.includes('list')) {
+      Content(`#### Example: List
+
+\`\`\`ruby
+# list returns an Array of ${entity.Name} entities, one per record (raises on error).
+${eVar}s = client.${entity.Name}.list${rbListArgs(entity)}
+${eVar}s.each { |item| puts item.data_get }
+\`\`\`
+
+`)
+    }
+
+    if (callable.includes('create')) {
+      // Members come from the SAME shape the runtime validates
+      // (opRequestShape): every required member must appear — including a
+      // required id and parent keys like page_id — with a real, executable
+      // literal (the doc test RUNS this block, so a comment placeholder
+      // would break it).
+      const createItems = requestExampleItems(entity, 'create')
+        .filter((it: any) => !it.optional)
+      Content(`#### Example: Create
+
+\`\`\`ruby
+${eVar} = client.${entity.Name}.create({
+`)
+      createItems.map((it: any) => {
+        Content(`  ${litString('rb', it.name)} => ${rbLit(it.type, 'example_' + it.name)}, # ${canonToType(it.type, target.name)}
+`)
+      })
+      Content(`})
+\`\`\`
+
+`)
+    }
+  })
+})
+
+
+export {
+  ReadmeEntity
+}

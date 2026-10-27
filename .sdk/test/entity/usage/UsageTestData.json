@@ -1,0 +1,45 @@
+{
+  "existing": {
+    "usage": {
+      "USAGE00": {
+        "bytes": 50,
+        "day": "s33",
+        "product": "s34",
+        "productId": "s35",
+        "requests": 54
+      },
+      "USAGE01": {
+        "bytes": 100,
+        "day": "s65",
+        "product": "s66",
+        "productId": "s67",
+        "requests": 104
+      },
+      "USAGE02": {
+        "bytes": 150,
+        "day": "s97",
+        "product": "s98",
+        "productId": "s99",
+        "requests": 154
+      }
+    }
+  },
+  "new": {
+    "usage": {
+      "usage_ref01": {
+        "bytes": 200,
+        "day": "sc9",
+        "product": "sca",
+        "productId": "scb",
+        "requests": 204
+      }
+    }
+  },
+  "requests": {
+    "GET /api/v1/usage": {
+      "provenance": "operation-contract",
+      "version": 2,
+      "source": "openapi3"
+    }
+  }
+}

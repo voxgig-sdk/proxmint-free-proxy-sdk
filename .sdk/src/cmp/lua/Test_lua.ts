@@ -1,0 +1,58 @@
+
+import type {
+  ModelEntity
+} from '@voxgig/apidef'
+
+import { cmp, each, Folder, File, Content, entityCollection,
+  TestControl } from '@voxgig/sdkgen'
+
+
+import { TestEntity } from './TestEntity_lua'
+import { TestDirect } from './TestDirect_lua'
+import { TestClean } from './TestClean_lua'
+import { ReadmeExamplesTest } from './ReadmeExamplesTest_lua'
+
+
+const Test = cmp(function Test(props: any) {
+  const { model, stdrep } = props.ctx$
+  const { target } = props
+
+  Folder({ name: 'test' }, () => {
+
+    // Write-once: a project's edited control file survives regeneration.
+    TestControl({ target, dir: 'test' })
+
+    // Generate exists test
+    File({ name: 'exists_test.' + target.ext }, () => {
+      Content(`-- ${model.const.Name} SDK exists test
+
+local sdk = require("${model.name}_sdk")
+
+describe("${model.const.Name}SDK", function()
+  it("should create test SDK", function()
+    local testsdk = sdk.test(nil, nil)
+    assert.is_not_nil(testsdk)
+  end)
+end)
+`)
+    })
+
+    const entity = each(entityCollection(model))
+      .filter((e: any) => false !== e.active)
+
+    each(entity, (entity: ModelEntity) => {
+      TestEntity({ target, entity })
+      TestDirect({ target, entity })
+    })
+
+    TestClean({ target })
+
+    // README ```lua example snippets: syntax-check + offline run.
+    ReadmeExamplesTest({ target })
+  })
+})
+
+
+export {
+  Test
+}

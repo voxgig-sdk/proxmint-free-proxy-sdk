@@ -1,0 +1,738 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Proxmint API",
+    "version": "1.1.0",
+    "summary": "Free proxy list and IP geolocation with no key; read-only account data with one.",
+    "description": "Two kinds of endpoint. The free proxy list and IP geolocation are open and key-free: rate limited per IP and sent with `access-control-allow-origin: *`, so they work from a browser as well as a server. The proxy list is published under CC BY 4.0 — attribution is the only condition.\n\nThe customer API under `/api/v1` is read-only and needs an API key, created under Settings in the dashboard and sent as `Authorization: Bearer <key>`. It returns proxy credentials, so it sends no CORS headers: call it from a server, never from browser code.",
+    "license": {
+      "name": "CC BY 4.0",
+      "url": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    "contact": {
+      "name": "Proxmint support",
+      "url": "https://proxmint.com/contact"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://proxmint.com"
+    }
+  ],
+  "paths": {
+    "/api/free-proxies": {
+      "get": {
+        "operationId": "listFreeProxies",
+        "summary": "List checked free proxies",
+        "description": "Every row has been connected to and measured, not scraped and forwarded. Rate limit is 60 requests per minute per IP; responses carry a `Link` header naming the dataset licence.",
+        "tags": [
+          "Free proxies"
+        ],
+        "parameters": [
+          {
+            "name": "protocol",
+            "in": "query",
+            "description": "Restrict to one protocol. Omit for all of them.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http",
+                "https",
+                "socks4",
+                "socks5"
+              ]
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "description": "ISO 3166-1 alpha-2, case-insensitive.",
+            "example": "de",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2
+            }
+          },
+          {
+            "name": "anonymity",
+            "in": "query",
+            "description": "`elite` hides that a proxy is in use at all; `transparent` forwards your IP.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "elite",
+                "anonymous",
+                "transparent"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Default `score`, which blends uptime and latency.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "score",
+                "latency",
+                "uptime",
+                "checked"
+              ],
+              "default": "score"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Capped at 200.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "`txt` returns bare `ip:port` lines, deduplicated — one endpoint listed under two protocols is one line, so a txt page can hold fewer rows than `pageSize`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "txt"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of live proxies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyPage"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "45.61.188.75:3128\n103.152.112.162:80\n"
+              }
+            }
+          },
+          "404": {
+            "description": "The free-proxy service is switched off on this deployment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded — 60 requests per minute per IP.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/geoip": {
+      "get": {
+        "operationId": "lookupIp",
+        "summary": "Geolocate an IP address",
+        "description": "Resolved against a local MaxMind GeoLite2 database — the lookup makes no outbound connection. Private and reserved ranges are rejected: they carry no meaningful public location.",
+        "tags": [
+          "Geolocation"
+        ],
+        "parameters": [
+          {
+            "name": "ip",
+            "in": "query",
+            "description": "Any public IPv4 or IPv6 address. Omit to look up the caller's own.",
+            "example": "8.8.8.8",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What is known about the address. Fields are null where the database has no value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeoIp"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a public IP address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No data for this address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The geolocation database is not loaded on this deployment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account": {
+      "get": {
+        "operationId": "getAccount",
+        "summary": "Balance, products, bandwidth and proxy credentials",
+        "description": "Everything a script checks before a run and needs to connect. Bandwidth figures are refreshed from the network every 15 minutes; `syncedAt` says when. Canceled products are not listed.",
+        "tags": [
+          "Customer API"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account behind the key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, invalid or revoked API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded — 60 requests per minute per IP. `Retry-After` says when to try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "operationId": "getUsage",
+        "summary": "Daily usage per product",
+        "description": "Bytes and requests per product per UTC day, oldest first. A day with no traffic has no row.",
+        "tags": [
+          "Customer API"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "description": "How many days back from today, inclusive.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage rows for the window.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`days` is not a whole number from 1 to 90.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, invalid or revoked API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded — 60 requests per minute per IP. `Retry-After` says when to try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API key (`pmk_…`) from Settings in the dashboard. Read-only."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "ProxyPage": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Proxy"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Matching rows across every page."
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "Proxy": {
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https",
+              "socks4",
+              "socks5"
+            ]
+          },
+          "countryCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 3166-1 alpha-2, lowercase."
+          },
+          "countryName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "anonymity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "elite",
+              "anonymous",
+              "transparent",
+              null
+            ]
+          },
+          "latencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Measured on the last successful check."
+          },
+          "uptimePct": {
+            "type": "number",
+            "description": "Share of checks this proxy has answered."
+          },
+          "score": {
+            "type": "number",
+            "description": "Ranking blend of uptime and latency."
+          },
+          "lastCheckedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ip",
+          "port",
+          "protocol",
+          "uptimePct",
+          "score"
+        ]
+      },
+      "GeoIp": {
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 3166-1 alpha-2, lowercase."
+          },
+          "countryName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "First subdivision — English name, else ISO code."
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lon": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "tz": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "IANA timezone, e.g. America/New_York."
+          },
+          "accuracyRadiusKm": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Radius around lat/lon, in km."
+          },
+          "asn": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "asnOrg": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ip"
+        ]
+      },
+      "Account": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "object",
+            "description": "Prepaid wallet balance.",
+            "properties": {
+              "cents": {
+                "type": "integer"
+              },
+              "usd": {
+                "type": "string",
+                "example": "12.50"
+              }
+            },
+            "required": [
+              "cents",
+              "usd"
+            ]
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          }
+        },
+        "required": [
+          "balance",
+          "products"
+        ]
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable product id; matches `productId` in usage rows."
+          },
+          "product": {
+            "type": "string",
+            "enum": [
+              "datacenter",
+              "residential",
+              "premium-residential",
+              "mobile"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "example": "Residential"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended",
+              "expired"
+            ],
+            "description": "`expired` means the bandwidth is used up — packs never expire by date."
+          },
+          "billing": {
+            "type": "string",
+            "enum": [
+              "pack",
+              "payg"
+            ]
+          },
+          "bandwidth": {
+            "type": "object",
+            "properties": {
+              "limitBytes": {
+                "type": "integer"
+              },
+              "usedBytes": {
+                "type": "integer"
+              },
+              "remainingBytes": {
+                "type": "integer"
+              },
+              "syncedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "limitBytes",
+              "usedBytes",
+              "remainingBytes",
+              "syncedAt"
+            ]
+          },
+          "proxy": {
+            "type": "object",
+            "description": "Everything a client needs to connect.",
+            "properties": {
+              "host": {
+                "type": "string",
+                "example": "gw.proxmint.com"
+              },
+              "httpPort": {
+                "type": "integer",
+                "example": 823
+              },
+              "socks5Port": {
+                "type": "integer",
+                "example": 824
+              },
+              "username": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "host",
+              "httpPort",
+              "socks5Port",
+              "username",
+              "password"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "product",
+          "name",
+          "status",
+          "billing",
+          "bandwidth",
+          "proxy"
+        ]
+      },
+      "Usage": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer"
+          },
+          "usage": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageRow"
+            }
+          }
+        },
+        "required": [
+          "days",
+          "usage"
+        ]
+      },
+      "UsageRow": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string",
+            "enum": [
+              "datacenter",
+              "residential",
+              "premium-residential",
+              "mobile"
+            ]
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-29"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "requests": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "productId",
+          "product",
+          "day",
+          "bytes",
+          "requests"
+        ]
+      }
+    }
+  }
+}

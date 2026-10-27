@@ -1,0 +1,99 @@
+# Entity: account
+
+main: kit: entity: account: {
+
+  alias: field: {}
+
+  fields: {
+    bandwidth: {
+      h: "Bandwidth"
+      n: "bandwidth"
+      r: true
+      t: "`$OBJECT`"
+    }
+    billing: {
+      h: "Billing"
+      n: "billing"
+      r: true
+      t: "`$STRING`"
+    }
+    id: {
+      h: "Id"
+      n: "id"
+      r: true
+      sh: "Stable product id; matches `productId` in usage rows."
+      t: "`$STRING`"
+    }
+    name: {
+      h: "Name"
+      n: "name"
+      r: true
+      t: "`$STRING`"
+    }
+    product: {
+      h: "Product"
+      n: "product"
+      r: true
+      t: "`$STRING`"
+    }
+    proxy: {
+      h: "Proxy"
+      n: "proxy"
+      r: true
+      sh: "Everything a client needs to connect."
+      t: "`$OBJECT`"
+    }
+    status: {
+      h: "Status"
+      n: "status"
+      r: true
+      sh: "`expired` means the bandwidth is used up — packs never expire by date."
+      t: "`$STRING`"
+    }
+  }
+
+  id: {
+    field: "id"
+    name: "id"
+  }
+
+  name: "account"
+  op: {
+    list: {
+      name: "list"
+      points: [
+        {
+          co: {
+            id: "GET /api/v1/account"
+            source: "openapi3"
+            version: 2
+          }
+          m: "GET"
+          o: "/api/v1/account"
+          rs: {
+            kind: "json"
+            media: "application/json"
+          }
+          s: [
+            {
+              lit: "api"
+            }
+            {
+              lit: "v1"
+            }
+            {
+              lit: "account"
+            }
+          ]
+          t: {
+            req: "`reqdata`"
+            res: "`body.products`"
+          }
+        }
+      ]
+    }
+  }
+
+
+
+}

@@ -1,0 +1,72 @@
+{
+  "existing": {
+    "geo_ip": {
+      "GEO_IP00": {
+        "accuracyRadiusKm": "s6e",
+        "asn": "s6f",
+        "asnOrg": "s70",
+        "city": "s71",
+        "countryCode": "s72",
+        "countryName": "s73",
+        "ip": "s74",
+        "lat": "s75",
+        "lon": "s76",
+        "region": "s77",
+        "tz": "s78",
+        "id": "GEO_IP00"
+      },
+      "GEO_IP01": {
+        "accuracyRadiusKm": "sdc",
+        "asn": "sdd",
+        "asnOrg": "sde",
+        "city": "sdf",
+        "countryCode": "se0",
+        "countryName": "se1",
+        "ip": "se2",
+        "lat": "se3",
+        "lon": "se4",
+        "region": "se5",
+        "tz": "se6",
+        "id": "GEO_IP01"
+      },
+      "GEO_IP02": {
+        "accuracyRadiusKm": "s14a",
+        "asn": "s14b",
+        "asnOrg": "s14c",
+        "city": "s14d",
+        "countryCode": "s14e",
+        "countryName": "s14f",
+        "ip": "s150",
+        "lat": "s151",
+        "lon": "s152",
+        "region": "s153",
+        "tz": "s154",
+        "id": "GEO_IP02"
+      }
+    }
+  },
+  "new": {
+    "geo_ip": {
+      "geo_ip_ref01": {
+        "accuracyRadiusKm": "s1b8",
+        "asn": "s1b9",
+        "asnOrg": "s1ba",
+        "city": "s1bb",
+        "countryCode": "s1bc",
+        "countryName": "s1bd",
+        "ip": "s1be",
+        "lat": "s1bf",
+        "lon": "s1c0",
+        "region": "s1c1",
+        "tz": "s1c2"
+      }
+    }
+  },
+  "requests": {
+    "GET /api/geoip": {
+      "provenance": "operation-contract",
+      "version": 2,
+      "source": "openapi3"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+# BasicFreeProxyFlow
+
+main: kit: flow: BasicFreeProxyFlow:
+{
+  entity: "free_proxy",
+  kind: "basic",
+  name: "BasicFreeProxyFlow",
+  step: [
+    {
+      o: "list",
+      v: [
+        {
+          apply: "ItemExists",
+          def: {
+            ref: "free_proxy_ref01"
+          }
+        }
+      ]
+    }
+  ],
+  "key$": "BasicFreeProxyFlow"
+}

@@ -1,0 +1,205 @@
+# Entity: free_proxy
+
+main: kit: entity: free_proxy: {
+
+  alias: field: {}
+
+  fields: {
+    anonymity: {
+      h: "Anonymity"
+      n: "anonymity"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    countryCode: {
+      h: "Country Code"
+      n: "countryCode"
+      r: false
+      sh: "ISO 3166-1 alpha-2, lowercase."
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    countryName: {
+      h: "Country Name"
+      n: "countryName"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    ip: {
+      h: "Ip"
+      n: "ip"
+      r: true
+      t: "`$STRING`"
+    }
+    lastCheckedAt: {
+      fo: "date-time"
+      h: "Last Checked At"
+      n: "lastCheckedAt"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    latencyMs: {
+      h: "Latency Ms"
+      n: "latencyMs"
+      r: false
+      sh: "Measured on the last successful check."
+      t: [
+        "`$ONE`"
+        [
+          "`$INTEGER`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    port: {
+      h: "Port"
+      n: "port"
+      r: true
+      t: "`$INTEGER`"
+    }
+    protocol: {
+      h: "Protocol"
+      n: "protocol"
+      r: true
+      t: "`$STRING`"
+    }
+    score: {
+      h: "Score"
+      n: "score"
+      r: true
+      sh: "Ranking blend of uptime and latency."
+      t: "`$NUMBER`"
+    }
+    uptimePct: {
+      h: "Uptime Pct"
+      n: "uptimePct"
+      r: true
+      sh: "Share of checks this proxy has answered."
+      t: "`$NUMBER`"
+    }
+  }
+
+  name: "free_proxy"
+  op: {
+    list: {
+      name: "list"
+      points: [
+        {
+          co: {
+            id: "GET /api/free-proxies"
+            source: "openapi3"
+            version: 2
+          }
+          g: {
+            query: [
+              {
+                k: "query"
+                n: "anonymity"
+                or: "anonymity"
+                r: false
+                t: "`$STRING`"
+              }
+              {
+                ex: "de"
+                k: "query"
+                n: "country"
+                or: "country"
+                r: false
+                t: "`$STRING`"
+              }
+              {
+                ex: "json"
+                k: "query"
+                n: "format"
+                or: "format"
+                r: false
+                t: "`$STRING`"
+              }
+              {
+                ex: 1
+                k: "query"
+                n: "page"
+                or: "page"
+                r: false
+                t: "`$INTEGER`"
+              }
+              {
+                ex: 50
+                k: "query"
+                n: "page_size"
+                or: "pageSize"
+                r: false
+                t: "`$INTEGER`"
+              }
+              {
+                k: "query"
+                n: "protocol"
+                or: "protocol"
+                r: false
+                t: "`$STRING`"
+              }
+              {
+                ex: "score"
+                k: "query"
+                n: "sort"
+                or: "sort"
+                r: false
+                t: "`$STRING`"
+              }
+            ]
+          }
+          m: "GET"
+          o: "/api/free-proxies"
+          rs: {
+            alternatives: [
+              {
+                kind: "raw"
+                media: "text/plain"
+              }
+            ]
+            kind: "json"
+            media: "application/json"
+          }
+          s: [
+            {
+              lit: "api"
+            }
+            {
+              lit: "free-proxies"
+            }
+          ]
+          t: {
+            req: "`reqdata`"
+            res: "`body.rows`"
+          }
+        }
+      ]
+    }
+  }
+
+
+
+}

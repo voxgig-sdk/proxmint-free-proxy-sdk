@@ -1,0 +1,233 @@
+
+import * as Path from 'node:path'
+
+import {
+  cmp, each, names, cmap,
+  List, File, Content, Copy, Folder, Fragment, Line, FeatureHook,
+  inactiveFeatureExcludes,
+  entityConstructorName, entityCollection, goModule, goPackageIdent, pluginExcludes,
+  targetFeatures,
+  TEST_CONTROL_EXCLUDE
+} from '@voxgig/sdkgen'
+
+
+import type {
+  ModelEntity
+} from '@voxgig/apidef'
+
+
+import {
+  KIT,
+  getModelPath
+} from '@voxgig/apidef'
+
+
+import { goFeatureName } from './utility_go'
+import { Package } from './Package_go'
+import { Config } from './Config_go'
+import { Schema } from './Schema_go'
+import { Gitignore } from './Gitignore_go'
+import { MainEntity } from './MainEntity_go'
+import { EntityTypes } from './EntityTypes_go'
+import { PrepareAuth } from './PrepareAuth_go'
+
+
+const Main = cmp(async function Main(props: any) {
+
+  const { target } = props
+  const { model } = props.ctx$
+
+  const entity: ModelEntity = getModelPath(model, `main.${KIT}.entity`)
+  // Gated by the applicability tags, so this target never imports or
+  // registers a feature it has no source for. One rule, one place:
+  // helpers/applicability.
+  const feature = targetFeatures(model, target)
+
+  // Go module path == the repo path on GitHub (org from model.origin),
+  // e.g. github.com/voxgig-sdk/<slug>-sdk. Used in go.mod and every import.
+  const gomodule = goModule(model, target.name)
+  // The root package name must be a plain Go identifier (can't be a path),
+  // so it stays a concatenated-lowercase form (e.g. voxgigdogsdk).
+  const gopackage = goPackageIdent(model, target.name)
+
+  Package({ target })
+
+  Gitignore({})
+
+  Copy({
+    from: 'tm/' + target.name,
+    // The generate-time trim: a declared feature that is off, and an inactive
+    // plugin group, whose `path` entries are relative to this Copy's root.
+    exclude: [/src\//, /utility\/struct\/go\.mod$/, TEST_CONTROL_EXCLUDE,
+      ...inactiveFeatureExcludes(props.ctx$, target), ...pluginExcludes(model)],
+    replace: {
+      ...props.ctx$.stdrep,
+      GOMODULE: gomodule,
+      '"github.com/voxgig/struct"': `"${gomodule}/utility/struct"`,
+    }
+  })
+
+  EntityTypes({ target })
+
+  PrepareAuth({ target })
+
+  Folder({ name: 'core' }, () => {
+
+    File({ name: model.name + '_sdk.' + target.ext }, () => {
+
+      Fragment(
+        {
+          from: Path.normalize(__dirname + '/../../../src/cmp/go/fragment/Main.fragment.go'),
+          replace: {
+            ...props.ctx$.stdrep,
+            'ProjectNameModule': gomodule,
+            '"github.com/voxgig/struct"': `"${gomodule}/utility/struct"`,
+
+            '#BuildFeatures': ({ indent }: any) => {
+              each(feature, (feat: any) => {
+                const fname = goFeatureName(feat)
+                Content({ indent }, `u.FeatureAdd(s.rootctx, New${fname}FeatureFunc())
+`)
+              })
+            },
+
+            '#Feature-Hook': ({ name, indent }: any) => Content({ indent }, `
+s.utility.FeatureHook(s.rootctx, "${name}")
+`),
+
+          }
+        },
+
+        () => {
+          each(entity, (entity: ModelEntity) => {
+            const entitySDK = getModelPath(model, `main.${KIT}.entity.${entity.name}`)
+            const entprops = { target, entity, entitySDK, gomodule }
+            MainEntity(entprops)
+          })
+        })
+    })
+
+    Config({ target })
+    Schema({ target })
+
+    // Generate registry.go with all constructor function vars
+    File({ name: 'registry.' + target.ext }, () => {
+      Content(`package core
+
+var UtilityRegistrar func(u *Utility)
+
+var NewBaseFeatureFunc func() Feature
+
+`)
+      each(feature, (feat: any) => {
+        if (feat.name !== 'base') {
+          const fname = goFeatureName(feat)
+          Content(`var New${fname}FeatureFunc func() Feature
+
+`)
+        }
+      })
+
+      each(entity, (ent: any) => {
+        Content(`var New${ent.Name}EntityFunc func(client *${model.const.Name}SDK, entopts map[string]any) ${model.const.Name}Entity
+
+`)
+      })
+    })
+  })
+
+  const hasEntities = Object.keys(entity || {}).length > 0
+  const entityImport = hasEntities ? `\n\t"${gomodule}/entity"` : ''
+  File({ name: model.name + '.' + target.ext }, () => {
+    Content(`package ${gopackage}
+
+import (
+	"${gomodule}/core"${entityImport}
+	"${gomodule}/feature"
+	_ "${gomodule}/utility"
+)
+
+// Type aliases preserve external API.
+type ${model.const.Name}SDK = core.${model.const.Name}SDK
+type Context = core.Context
+type Utility = core.Utility
+type Feature = core.Feature
+type Entity = core.Entity
+type ${model.const.Name}Entity = core.${model.const.Name}Entity
+type StreamItem = core.StreamItem
+type FetcherFunc = core.FetcherFunc
+type Spec = core.Spec
+type Result = core.Result
+type Response = core.Response
+type Operation = core.Operation
+type Control = core.Control
+type ${model.const.Name}Error = core.${model.const.Name}Error
+
+// BaseFeature from feature package.
+type BaseFeature = feature.BaseFeature
+
+func init() {
+`)
+
+    Content(`	core.NewBaseFeatureFunc = func() core.Feature {
+		return feature.NewBaseFeature()
+	}
+`)
+
+    each(feature, (feat: any) => {
+      if (feat.name !== 'base') {
+        const fname = goFeatureName(feat)
+        Content(`	core.New${fname}FeatureFunc = func() core.Feature {
+		return feature.New${fname}Feature()
+	}
+`)
+      }
+    })
+
+    each(entity, (ent: any) => {
+      Content(`	core.New${ent.Name}EntityFunc = func(client *core.${model.const.Name}SDK, entopts map[string]any) core.${model.const.Name}Entity {
+		return entity.${entityConstructorName(ent, entityCollection(model))}(client, entopts)
+	}
+`)
+    })
+
+    Content(`}
+
+// Constructor re-exports.
+var New${model.const.Name}SDK = core.New${model.const.Name}SDK
+var TestSDK = core.TestSDK
+var NewContext = core.NewContext
+var NewSpec = core.NewSpec
+var NewResult = core.NewResult
+var NewResponse = core.NewResponse
+var NewOperation = core.NewOperation
+var MakeConfig = core.MakeConfig
+var SharedConfig = core.SharedConfig
+
+// No-arg convenience constructors. Go has no default-argument syntax,
+// so these aliases let callers write \`sdk.New()\` / \`sdk.Test()\`
+// instead of \`sdk.New${model.const.Name}SDK(nil)\` / \`sdk.TestSDK(nil, nil)\`
+// for the common no-options case.
+func New() *${model.const.Name}SDK  { return New${model.const.Name}SDK(nil) }
+func Test() *${model.const.Name}SDK { return TestSDK(nil, nil) }
+`)
+
+    // Feature constructor re-exports - base is always present
+    Content(`var NewBaseFeature = feature.NewBaseFeature
+`)
+
+    each(feature, (feat: any) => {
+      if (feat.name !== 'base') {
+        const fname = goFeatureName(feat)
+        Content(`var New${fname}Feature = feature.New${fname}Feature
+`)
+      }
+    })
+  })
+
+})
+
+
+export {
+  Main
+}

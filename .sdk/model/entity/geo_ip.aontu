@@ -1,0 +1,188 @@
+# Entity: geo_ip
+
+main: kit: entity: geo_ip: {
+
+  alias: field: {}
+
+  fields: {
+    accuracyRadiusKm: {
+      h: "Accuracy Radius Km"
+      n: "accuracyRadiusKm"
+      r: false
+      sh: "Radius around lat/lon, in km."
+      t: [
+        "`$ONE`"
+        [
+          "`$INTEGER`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    asn: {
+      h: "Asn"
+      n: "asn"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$INTEGER`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    asnOrg: {
+      h: "Asn Org"
+      n: "asnOrg"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    city: {
+      h: "City"
+      n: "city"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    countryCode: {
+      h: "Country Code"
+      n: "countryCode"
+      r: false
+      sh: "ISO 3166-1 alpha-2, lowercase."
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    countryName: {
+      h: "Country Name"
+      n: "countryName"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    ip: {
+      h: "Ip"
+      n: "ip"
+      r: true
+      t: "`$STRING`"
+    }
+    lat: {
+      h: "Lat"
+      n: "lat"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$NUMBER`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    lon: {
+      h: "Lon"
+      n: "lon"
+      r: false
+      t: [
+        "`$ONE`"
+        [
+          "`$NUMBER`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    region: {
+      h: "Region"
+      n: "region"
+      r: false
+      sh: "First subdivision — English name, else ISO code."
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+    tz: {
+      h: "Tz"
+      n: "tz"
+      r: false
+      sh: "IANA timezone, e.g."
+      t: [
+        "`$ONE`"
+        [
+          "`$STRING`"
+          "`$NULL`"
+        ]
+      ]
+    }
+  }
+
+  name: "geo_ip"
+  op: {
+    load: {
+      name: "load"
+      points: [
+        {
+          co: {
+            id: "GET /api/geoip"
+            source: "openapi3"
+            version: 2
+          }
+          g: {
+            query: [
+              {
+                ex: "8.8.8.8"
+                k: "query"
+                n: "ip"
+                or: "ip"
+                r: false
+                t: "`$STRING`"
+              }
+            ]
+          }
+          m: "GET"
+          o: "/api/geoip"
+          rs: {
+            kind: "json"
+            media: "application/json"
+          }
+          s: [
+            {
+              lit: "api"
+            }
+            {
+              lit: "geoip"
+            }
+          ]
+          t: {
+            req: "`reqdata`"
+            res: "`body`"
+          }
+        }
+      ]
+    }
+  }
+
+
+
+}

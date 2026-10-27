@@ -1,0 +1,28 @@
+# BasicGeoIpFlow
+
+main: kit: flow: BasicGeoIpFlow:
+{
+  entity: "geo_ip",
+  kind: "basic",
+  name: "BasicGeoIpFlow",
+  step: [
+    {
+      i: {
+        ref: "geo_ip_ref01",
+        srcdatavar: "geo_ip_ref01_data",
+        suffix: "_dt0"
+      }
+
+      o: "load",
+      v: [
+        {
+          apply: "TextFieldMark",
+          def: {
+            mark: "Mark01-geo_ip_ref01"
+          }
+        }
+      ]
+    }
+  ],
+  "key$": "BasicGeoIpFlow"
+}

@@ -1,0 +1,37 @@
+# API Information
+
+
+main: {
+  kit: {
+    info: {
+      contact: {
+        name: "Proxmint support"
+        url: "https://proxmint.com/contact"
+      }
+      description: `Two kinds of endpoint. The free proxy list and IP geolocation are open and key-free: rate limited per IP and sent with \`access-control-allow-origin: *\`, so they work from a browser as well as a server. The proxy list is published under CC BY 4.0 — attribution is the only condition.
+
+The customer API under \`/api/v1\` is read-only and needs an API key, created under Settings in the dashboard and sent as \`Authorization: Bearer <key>\`. It returns proxy credentials, so it sends no CORS headers: call it from a server, never from browser code.`
+      license: {
+        name: "CC BY 4.0"
+        url: "https://creativecommons.org/licenses/by/4.0/"
+      }
+      security: {
+        in: "header"
+        name: "Authorization"
+        prefix: "Bearer"
+        scheme: "apiKey"
+        type: "http"
+      }
+      servers: [
+        {
+          url: "https://proxmint.com"
+        }
+      ]
+      summary: "Free proxy list and IP geolocation with no key; read-only account data with one."
+      title: "Proxmint API"
+      version: "1.1.0"
+      website: "https://proxmint.com"
+    }
+  }
+}
+

@@ -1,0 +1,65 @@
+{
+  "existing": {
+    "free_proxy": {
+      "FREE_PROXY00": {
+        "anonymity": "s64",
+        "countryCode": "s65",
+        "countryName": "s66",
+        "ip": "s67",
+        "lastCheckedAt": "s68",
+        "latencyMs": "s69",
+        "port": 106,
+        "protocol": "s6b",
+        "score": 108,
+        "uptimePct": 109
+      },
+      "FREE_PROXY01": {
+        "anonymity": "sc8",
+        "countryCode": "sc9",
+        "countryName": "sca",
+        "ip": "scb",
+        "lastCheckedAt": "scc",
+        "latencyMs": "scd",
+        "port": 206,
+        "protocol": "scf",
+        "score": 208,
+        "uptimePct": 209
+      },
+      "FREE_PROXY02": {
+        "anonymity": "s12c",
+        "countryCode": "s12d",
+        "countryName": "s12e",
+        "ip": "s12f",
+        "lastCheckedAt": "s130",
+        "latencyMs": "s131",
+        "port": 306,
+        "protocol": "s133",
+        "score": 308,
+        "uptimePct": 309
+      }
+    }
+  },
+  "new": {
+    "free_proxy": {
+      "free_proxy_ref01": {
+        "anonymity": "s190",
+        "countryCode": "s191",
+        "countryName": "s192",
+        "ip": "s193",
+        "lastCheckedAt": "s194",
+        "latencyMs": "s195",
+        "port": 406,
+        "protocol": "s197",
+        "score": 408,
+        "uptimePct": 409
+      }
+    }
+  },
+  "requests": {
+    "GET /api/free-proxies": {
+      "provenance": "operation-contract",
+      "version": 2,
+      "source": "openapi3"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "existing": {
+    "account": {
+      "ACCOUNT00": {
+        "bandwidth": {},
+        "billing": "s47",
+        "id": "ACCOUNT00",
+        "name": "s49",
+        "product": "s4a",
+        "proxy": {},
+        "status": "s4c"
+      },
+      "ACCOUNT01": {
+        "bandwidth": {},
+        "billing": "s8d",
+        "id": "ACCOUNT01",
+        "name": "s8f",
+        "product": "s90",
+        "proxy": {},
+        "status": "s92"
+      },
+      "ACCOUNT02": {
+        "bandwidth": {},
+        "billing": "sd3",
+        "id": "ACCOUNT02",
+        "name": "sd5",
+        "product": "sd6",
+        "proxy": {},
+        "status": "sd8"
+      }
+    }
+  },
+  "new": {
+    "account": {
+      "account_ref01": {
+        "bandwidth": {},
+        "billing": "s119",
+        "name": "s11b",
+        "product": "s11c",
+        "proxy": {},
+        "status": "s11e"
+      }
+    }
+  },
+  "requests": {
+    "GET /api/v1/account": {
+      "provenance": "operation-contract",
+      "version": 2,
+      "source": "openapi3"
+    }
+  }
+}
